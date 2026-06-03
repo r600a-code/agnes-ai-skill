@@ -1,23 +1,24 @@
 ---
 name: "agnes-ai"
-description: "Agnes AI API 全功能接入：文生图、图生视频、多图参考视频、图片编辑。当用户需要使用 Agnes AI 生成图片、视频、或进行 AI 创意内容制作时调用。"
+description: "Agnes AI API 全功能接入：文生图、首尾帧视频生成、图生视频、图片编辑。当用户需要使用 Agnes AI 生成图片、视频、或进行 AI 创意内容制作时调用。"
 ---
 
 # Agnes AI 全功能 Skill
 
-Agnes AI API 提供文生图、文生视频（含参考图）、图片编辑等能力，适用于营销素材、短视频创意、产品展示等场景。
+Agnes AI API 提供文生图、文生视频（含首尾帧）、图片编辑等能力，适用于营销素材、短视频创意、产品展示等场景。
 
 ---
 
 ## ⚠️ 当前能力边界提醒
 
-> **重要：Agnes Video 模型切分场景能力很弱**，无法像专业剪辑工具那样自动分镜。它本质上是一个"动态图"生成器——基于一张或多张参考图，根据 prompt 描述让画面动起来。
+> **重要：Agnes Video 模型切分场景能力很弱**，无法像专业剪辑工具那样自动分镜。它本质上是一个"动态图"生成器——基于首尾帧或单张参考图，根据 prompt 描述让画面动起来。
 >
 > **够用了！** 适用场景：
 > - 产品展示的动态特写（轻微运镜、光影变化）
 > - 人物微笑、眨眼、微表情等简单动作
 > - 物体旋转、光影扫过等氛围动画
 > - 博主手持产品、轻微晃动等短视频风格
+> - 首尾帧之间的平滑过渡动画
 >
 > **不适用场景：**
 > - 复杂多镜头分镜叙事
@@ -101,7 +102,25 @@ for item in prompts:
 
 ---
 
-## 三、图生视频 / 多图参考视频（Image-to-Video）
+## 三、视频生成模式
+
+Agnes Video 支持两种核心模式：
+
+### 模式 A：首尾帧（First-Last Frame）
+
+给定第一帧和最后一帧图片，模型自动生成中间的平滑过渡视频。适合：
+- 变脸/变妆效果
+- 产品展示动画（如瓶身旋转）
+- 表情变化过渡
+- 场景平滑切换
+
+### 模式 B：单图参考（Image-to-Video）
+
+给定一张参考图，模型根据 prompt 让画面动起来。适合：
+- 让静态图片"活"起来
+- 产品微动画
+- 人物微表情
+- 氛围渲染
 
 ### 接口
 
@@ -114,8 +133,8 @@ POST /v1/videos
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `model` | string | 固定 `"agnes-video-v2.0"` |
-| `prompt` | string | 视频描述，支持中文，可用 `@图片1` `@图片2` 引用参考图 |
-| `extra_body.image` | array | 参考图 URL 数组，按顺序对应 `@图片1` `@图片2` |
+| `prompt` | string | 视频描述，支持中文，可用 `@图片1` `@图片2` 引用首尾帧 |
+| `extra_body.image` | array | 首帧 URL（第一个）和尾帧 URL（第二个），或单张参考图 |
 | `width` | int | 输出宽度，如 `1024`, `1152`, `832` |
 | `height` | int | 输出高度，如 `1024`, `768`, `512` |
 | `num_frames` | int | 总帧数，24fps 下：81帧≈3.4s, 121帧≈5s, 241帧≈10s, 361帧≈15s |
@@ -123,13 +142,13 @@ POST /v1/videos
 
 ### 关键发现
 
-1. **单图参考**：`extra_body.image` 传一个 URL，prompt 中用 `@图片1` 引用
-2. **多图参考**：`extra_body.image` 传多个 URL，prompt 中用 `@图片1` `@图片2` 分别引用
-3. **分辨率匹配**：视频 width×height 与参考图分辨率一致时参考效果最佳
+1. **首尾帧**：`extra_body.image` 传两个 URL，第一个是首帧，第二个是尾帧，prompt 中用 `@图片1` `@图片2` 分别引用
+2. **单图参考**：`extra_body.image` 传一个 URL，prompt 中用 `@图片1` 引用
+3. **分辨率匹配**：视频 width×height 与首尾帧图片分辨率一致时效果最佳
 4. **图片 URL**：必须使用可公开访问的 URL（Google Cloud Storage 的 URL 最稳定），第三方图床（如 catbox）可能被 API 拒绝
 5. **中文 prompt**：视频模型支持中文 prompt，可直接包含台词内容
 
-### Python 示例：多图参考生成视频（带轮询）
+### Python 示例：首尾帧视频生成（带轮询）
 
 ```python
 import requests
@@ -140,23 +159,23 @@ API_KEY = "YOUR_API_KEY"
 BASE_URL = "https://apihub.agnes-ai.com/v1"
 HEADERS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 
-# 参考图 URL
-WOMAN_URL = "https://storage.googleapis.com/agnes-aigc-test/images/xxx.png"
-CREAM_URL = "https://storage.googleapis.com/agnes-aigc-test/images/yyy.png"
+# 首帧（人物起始状态）和尾帧（人物结束状态）
+FIRST_FRAME = "https://storage.googleapis.com/agnes-aigc-test/images/xxx_start.png"
+LAST_FRAME = "https://storage.googleapis.com/agnes-aigc-test/images/xxx_end.png"
 
-# 中文提示词（含台词）
+# 中文提示词
 prompt = (
-    "@图片1中美妆博主用中文进行介绍，妆容改为明艳大气，去掉脸部反光，笑容甜美，近景镜头，"
-    "手持@图片2的面霜面向镜头展示，清新简约背景，元气甜美风格。"
+    "@图片1中的人物逐渐转变为@图片2的样子，妆容从淡雅变为明艳大气，笑容甜美，"
+    "近景镜头，清新简约背景，元气甜美风格。"
     "博主台词：挖到本命面霜了！质地像云朵一样软糯，一抹就吸收，熬夜急救、补水保湿全搞定，素颜都自带柔光感。"
 )
 
-# 创建任务
+# 创建任务：首尾帧模式
 payload = {
     "model": "agnes-video-v2.0",
     "prompt": prompt,
     "extra_body": {
-        "image": [WOMAN_URL, CREAM_URL]
+        "image": [FIRST_FRAME, LAST_FRAME]
     },
     "width": 1024,
     "height": 1024,
@@ -252,7 +271,7 @@ resp = requests.post(f"{BASE_URL}/images/generations", headers=HEADERS, json=pay
 | ~15s | 361 | 1152×768 |
 
 **分辨率选择建议：**
-- 与参考图一致时参考效果最好（如参考图是 1024×1024，视频也设 1024×1024）
+- 首尾帧图片必须保持相同分辨率，视频 width×height 与首尾帧一致时效果最佳
 - 16:9 横屏：1152×768
 - 1:1 方形：1024×1024
 - 16:9 竖屏：512×832
@@ -263,7 +282,8 @@ resp = requests.post(f"{BASE_URL}/images/generations", headers=HEADERS, json=pay
 
 | 问题 | 原因 | 解决方案 |
 |------|------|----------|
-| 参考图未生效 | 分辨率不匹配 | 视频 width×height 与参考图保持一致 |
+| 首尾帧未生效 | 分辨率不匹配 | 视频 width×height 与首尾帧图片保持一致 |
+| 首尾帧差异太大 | 模型过渡能力有限 | 首尾帧保持主体一致，只改变表情/姿势/光影 |
 | Invalid image | 图片 URL 不可访问 | 使用 GCS 或 Agnes 自己生成的图片 URL |
 | Request timeout | base64 图片过大 | 上传图片获取 URL，不要用 base64 |
 | 生成失败 status=failed | prompt 过于复杂 | 简化 prompt，减少场景描述 |
@@ -283,9 +303,10 @@ resp = requests.post(f"{BASE_URL}/images/generations", headers=HEADERS, json=pay
 
 ## 八、最佳实践
 
-1. **图片先于视频**：先用文生图生成参考图，再用参考图生成视频
-2. **prompt 写法**：中文 prompt 中用 `@图片1` `@图片2` 引用参考图数组中的对应图片
-3. **台词集成**：视频模型支持在 prompt 中直接写台词，不需要额外的 TTS
-4. **批量生成**：多个任务可以同时提交，然后分别轮询
-5. **错误重试**：网络请求建议加 3 次重试，间隔 5 秒
-6. **帧数公式**：`num_frames = 秒数 × 24 + 1`
+1. **图片先于视频**：先用文生图生成首尾帧图片，再用首尾帧生成视频
+2. **首尾帧要求**：两张图保持相同分辨率，主体（人物/产品）保持一致，只改变表情/姿势/光影
+3. **prompt 写法**：中文 prompt 中用 `@图片1`（首帧）`@图片2`（尾帧）引用
+4. **台词集成**：视频模型支持在 prompt 中直接写台词，不需要额外的 TTS
+5. **批量生成**：多个任务可以同时提交，然后分别轮询
+6. **错误重试**：网络请求建议加 3 次重试，间隔 5 秒
+7. **帧数公式**：`num_frames = 秒数 × 24 + 1`

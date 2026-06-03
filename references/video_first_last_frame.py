@@ -1,4 +1,8 @@
-"""Agnes AI 多图参考视频生成示例"""
+"""Agnes AI 首尾帧视频生成示例
+
+使用两张图片（首帧 + 尾帧），模型自动生成中间的平滑过渡视频。
+适合：变妆效果、表情变化、产品展示动画等。
+"""
 import requests
 import time
 import json
@@ -8,24 +12,24 @@ BASE_URL = "https://apihub.agnes-ai.com/v1"
 HEADERS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
 SAVE_DIR = "."
 
-# 参考图 URL
-WOMAN_URL = "https://storage.googleapis.com/agnes-aigc-test/images/text-to-image/2026/06/7c86e60dbca0498098c74a5d96c834e4.png"
-CREAM_URL = "https://storage.googleapis.com/agnes-aigc-test/images/text-to-image/2026/06/ef2e3c8513c0404187ff8da26bf31694.png"
+# 首帧（起始状态）和尾帧（结束状态）
+FIRST_FRAME = "https://storage.googleapis.com/agnes-aigc-test/images/text-to-image/2026/06/xxx_start.png"
+LAST_FRAME = "https://storage.googleapis.com/agnes-aigc-test/images/text-to-image/2026/06/xxx_end.png"
 
-# 中文提示词（含台词，@图片1 对应 WOMAN_URL，@图片2 对应 CREAM_URL）
+# 中文提示词（@图片1 = 首帧，@图片2 = 尾帧）
 prompt = (
-    "@图片1中美妆博主用中文进行介绍，妆容改为明艳大气，去掉脸部反光，笑容甜美，近景镜头，"
-    "手持@图片2的面霜面向镜头展示，清新简约背景，元气甜美风格。"
+    "@图片1中的人物逐渐转变为@图片2的样子，妆容从淡雅变为明艳大气，笑容甜美，"
+    "近景镜头，清新简约背景，元气甜美风格。"
     "博主台词：挖到本命面霜了！质地像云朵一样软糯，一抹就吸收，熬夜急救、补水保湿全搞定，素颜都自带柔光感。"
 )
 
 
-def create_task(prompt, image_urls, width=1024, height=1024, num_frames=121, frame_rate=24):
-    """创建视频生成任务"""
+def create_task(prompt, first_frame, last_frame, width=1024, height=1024, num_frames=121, frame_rate=24):
+    """创建首尾帧视频生成任务"""
     payload = {
         "model": "agnes-video-v2.0",
         "prompt": prompt,
-        "extra_body": {"image": image_urls},
+        "extra_body": {"image": [first_frame, last_frame]},
         "width": width,
         "height": height,
         "num_frames": num_frames,
@@ -75,12 +79,13 @@ def poll_task(task_id, save_path, timeout=900, interval=20):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Agnes Video - Multi-Reference Generation")
+    print("Agnes Video - First-Last Frame Generation")
     print("=" * 60)
 
     task_id = create_task(
         prompt=prompt,
-        image_urls=[WOMAN_URL, CREAM_URL],
+        first_frame=FIRST_FRAME,
+        last_frame=LAST_FRAME,
         width=1024,
         height=1024,
         num_frames=121,

@@ -58,7 +58,7 @@ def poll_task(task_id, save_path, timeout=900, interval=20):
                 print(f"  [{elapsed}s] {status} {progress}%", flush=True)
 
                 if status == "completed":
-                    video_url = d.get("video_url")
+                    video_url = d.get("remixed_from_video_id")
                     if video_url:
                         vr = requests.get(video_url, timeout=180)
                         if vr.status_code == 200:

@@ -147,6 +147,7 @@ POST /v1/videos
 3. **分辨率匹配**：视频 width×height 与首尾帧图片分辨率一致时效果最佳
 4. **图片 URL**：必须使用可公开访问的 URL（Google Cloud Storage 的 URL 最稳定），第三方图床（如 catbox）可能被 API 拒绝
 5. **中文 prompt**：视频模型支持中文 prompt，可直接包含台词内容
+6. **视频 URL 字段**：返回 JSON 中视频地址字段名为 `remixed_from_video_id`（非 `video_url`）
 
 ### Python 示例：首尾帧视频生成（带轮询）
 
@@ -197,7 +198,7 @@ while time.time() - start < 900:
     print(f"[{int(time.time()-start)}s] {status} {progress}%")
     
     if status == "completed":
-        video_url = d.get("video_url")
+        video_url = d.get("remixed_from_video_id")
         if video_url:
             vr = requests.get(video_url, timeout=180)
             with open("output.mp4", "wb") as f:
